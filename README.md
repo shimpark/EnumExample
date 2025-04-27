@@ -1,1 +1,5 @@
-# EnumExample
+# ASP.NET CORE 8, ENUM 활용
+
+- CHECKBOX
+- DROPDOWNLIST
+
