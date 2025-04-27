@@ -1,0 +1,339 @@
+﻿@model EnumExample.Models.ColourSelectionViewModel
+@using EnumExample.Controllers
+@using EnumExample.EnumHelpers.Core
+@using EnumExample.Models
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "색상 선택";
+}
+
+<div class="container">
+    <h1>색상 선택</h1>
+
+    <form asp-controller="Home" asp-action="Index" method="post">
+        <div class="mb-3">
+            <label asp-for="BasicSelectedColour" class="form-label">1. 색상 선택:</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="colourSearch" placeholder="색상 검색..." aria-label="색상 검색">
+                <select asp-for="BasicSelectedColour" asp-items="ViewBag.ColoursList" class="form-select" id="searchHelperSelect">
+                </select>
+            </div>
+            <span asp-validation-for="BasicSelectedColour" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">2. 색상 선택 (커스텀 헬퍼 사용):</label>
+            <div class="input-group">
+                <input type="text" class="form-control colour-filter" id="customHelperSearch" data-target="customHelper" placeholder="색상 검색..." aria-label="색상 검색">
+                @(Html.EnumDropDownListFor<ColourSelectionViewModel, UserColours>(m => m.CustomHelperSelectedColour, 
+                        htmlAttributes: new { @class = "form-select", id = "customHelperSelect" }, 
+                        emptyText: "-- 색상을 선택하세요 --"))
+            </div>
+            <span asp-validation-for="CustomHelperSelectedColour" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">3. 색상 선택 (태그 헬퍼 사용):</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="tagHelperSearch" placeholder="색상 검색..." aria-label="색상 검색">
+                <enum-select asp-for="TagHelperSelectedColour" 
+                    asp-enum-type="@typeof(UserColours)" 
+                    asp-empty-text="-- 색상을 선택하세요 --" 
+                    class="form-select"
+                    id="tagHelperSelect">
+                </enum-select>
+            </div>
+            <span asp-validation-for="TagHelperSelectedColour" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">다중 색상 선택:</label>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="multipleColourSearch" placeholder="색상 검색..." aria-label="색상 검색">
+            </div>
+            @(Html.EnumCheckBoxListFor<ColourSelectionViewModel, UserColours>(
+                m => m.MultipleColours, new { @class = "enum-checkbox-list" }))
+            <span asp-validation-for="MultipleColours" class="text-danger"></span>
+            <div id="multipleColoursPreview" class="d-flex gap-2 mt-2"></div>
+        </div>
+
+        <div class="alert alert-info mb-3">
+            <small>* 색상을 선택하면 미리보기가 표시됩니다.</small>
+            <br>
+            <small>* 검색창에 입력하여 원하는 색상을 빠르게 찾을 수 있습니다.</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">제출</button>
+    </form>
+
+    @if (ViewBag.BasicSelectedColourDescription != null)
+    {
+        <div class="alert alert-success mt-4">
+            <h4>1번 선택된 색상:</h4>
+            <p>@ViewBag.BasicSelectedColourDescription</p>
+
+            <h4>2번 선택된 색상:</h4>
+            <p>@ViewBag.CustomHelperSelectedColourDescription</p>
+
+            <h4>3번 선택된 색상:</h4>
+            <p>@ViewBag.TagHelperSelectedColourDescription</p>
+
+            @if (ViewBag.MultipleColoursDescription != null)
+            {
+                <h4>다중 선택된 색상:</h4>
+                <p>@ViewBag.MultipleColoursDescription</p>
+            }
+        </div>
+    }
+
+    <h3 class="mt-4">모든 색상 목록:</h3>
+    <div class="input-group mb-3">
+        <input type="text" class="form-control" id="colourListSearch" placeholder="색상 목록 검색..." aria-label="색상 목록 검색">
+    </div>
+    <ul class="list-group" id="colourList">
+        @foreach (UserColours colour in Enum.GetValues(typeof(UserColours)))
+        {
+            <li class="list-group-item d-flex align-items-center">
+                <div class="colour-preview me-2" style="width: 20px; height: 20px; background-color: @colour.ToString().ToLower(); border: 1px solid #ddd;"></div>
+                <strong>@colour</strong>: @Html.EnumDisplayFor(colour)
+            </li>
+        }
+    </ul>
+
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">JSON API 예제</h5>
+            <p class="card-text">모든 색상 데이터를 가져오려면 <a href="/api/colours" target="_blank">/api/colours</a>를 호출하세요.</p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            let colourOptionsCache = {
+                searchHelper:[],
+                customHelper: [],
+                tagHelper: []
+            };
+
+            // 초기 옵션 캐시 설정
+            function initializeOptionsCache() {
+                // 헬퍼 옵션 캐시
+                $('#searchHelperSelect option').each(function() {
+                    const $option = $(this);
+                    colourOptionsCache.searchHelper.push({
+                        value: $option.val(),
+                        text: $option.text(),
+                        description: $option.data('description') || '',
+                        isDefault: !$option.val()
+                    });
+                });
+
+                // 커스텀 헬퍼 옵션 캐시
+                $('#customHelperSelect option').each(function() {
+                    const $option = $(this);
+                    colourOptionsCache.customHelper.push({
+                        value: $option.val(),
+                        text: $option.text(),
+                        description: $option.data('description') || '',
+                        isDefault: !$option.val()
+                    });
+                });
+
+                // 태그 헬퍼 옵션 캐시
+                $('#tagHelperSelect option').each(function() {
+                    const $option = $(this);
+                    colourOptionsCache.tagHelper.push({
+                        value: $option.val(),
+                        text: $option.text(),
+                        description: $option.data('description') || '',
+                        isDefault: !$option.val()
+                    });
+                });
+            }
+
+            // 드롭다운 검색 기능
+            function filterSelectOptions(inputValue, $select, cacheKey) {
+                const filter = inputValue.toLowerCase();
+                const options = colourOptionsCache[cacheKey];
+                
+                // 검색어가 없으면 모든 옵션 표시
+                if (!filter) {
+                    $select.empty();
+                    options.forEach(option => {
+                        $select.append($('<option>', {
+                            value: option.value,
+                            text: option.text,
+                            'data-description': option.description
+                        }));
+                    });
+                    return;
+                }
+
+                // 검색어가 있으면 포함된 항목만 필터링
+                const filteredOptions = options.filter(option => 
+                    option.isDefault || 
+                    option.text.toLowerCase().includes(filter) || 
+                    (option.description && option.description.toLowerCase().includes(filter))
+                );
+
+                // select 초기화 및 옵션 재생성
+                $select.empty();
+                filteredOptions.forEach(option => {
+                    $select.append($('<option>', {
+                        value: option.value,
+                        text: option.text,
+                        'data-description': option.description
+                    }));
+                });
+            }
+
+            // API 데이터를 가져와서 검색 데이터 보강
+            $.getJSON('/api/colours')
+                .done(function(data) {
+                    // select 옵션에 description 데이터 추가
+                    $('select option').each(function() {
+                        const $option = $(this);
+                        const colourData = data.find(c => c.name === $option.text());
+                        if (colourData) {
+                            $option.data('description', colourData.description);
+                        }
+                    });
+
+                    // 체크박스 라벨에 description 데이터 추가
+                    $('.enum-checkbox-list label').each(function() {
+                        const $label = $(this);
+                        const colourData = data.find(c => c.name === $label.text().trim());
+                        if (colourData) {
+                            $label.data('description', colourData.description);
+                        }
+                    });
+
+                    // 옵션 캐시 초기화
+                    initializeOptionsCache();
+
+                    // 검색 이벤트 핸들러 등록
+                    // 헬퍼 검색
+                    $('#colourSearch').on('input', function() {
+                        const searchText = $(this).val().toLowerCase();
+                        if (searchText) {
+                            $('#searchHelperSelect').val('');
+                        }
+                        filterSelectOptions($(this).val(), $('#searchHelperSelect'), 'searchHelper');
+                    });
+
+                    // 커스텀 헬퍼 검색
+                    $('#customHelperSearch').on('input', function() {
+                        const searchText = $(this).val().toLowerCase();
+                        if (searchText) {
+                            $('#customHelperSelect').val('');
+                        }
+                        filterSelectOptions($(this).val(), $('#customHelperSelect'), 'customHelper');
+                    });
+
+                    // 태그 헬퍼 검색
+                    $('#tagHelperSearch').on('input', function() {
+                        const searchText = $(this).val().toLowerCase();
+                        if (searchText) {
+                            $('#tagHelperSelect').val('');
+                        }
+                        filterSelectOptions($(this).val(), $('#tagHelperSelect'), 'tagHelper');
+                    });
+                })
+                .fail(function(error) {
+                    console.error('API 호출 오류:', error);
+                });
+
+            // 다중 선택 검색
+            $('#multipleColourSearch').on('input', function() {
+                const searchText = $(this).val().toLowerCase();
+                $('.enum-checkbox-list .form-check').each(function() {
+                    const $formCheck = $(this);
+                    const labelText = $formCheck.find('.form-check-label').text().toLowerCase();
+                    const matches = !searchText || labelText.includes(searchText);
+                    $formCheck.toggle(matches);
+                });
+
+                // 검색어가 있을 때 체크박스 초기화
+                if (searchText) {
+                    $('.enum-checkbox-list .form-check-input:checked').prop('checked', false);
+                    updateMultipleColoursPreview();
+                }
+            });
+
+            // 체크박스 변경 시 미리보기 업데이트
+            function updateMultipleColoursPreview() {
+                const $preview = $('#multipleColoursPreview');
+                $preview.empty();
+                
+                $('.enum-checkbox-list .form-check-input:checked').each(function() {
+                    const colourName = $(this).siblings('.form-check-label').text();
+                    const $box = $('<div>')
+                        .addClass('colour-preview')
+                        .css({
+                            'width': '20px',
+                            'height': '20px',
+                            'background-color': colourName.toLowerCase().replace(/\s+/g, ''),
+                            'border': '1px solid #ddd',
+                            'border-radius': '4px',
+                            'margin-right': '4px'
+                        });
+                    $preview.append($box);
+                });
+            }
+
+            // 체크박스 변경 이벤트 리스너
+            $('.enum-checkbox-list .form-check-input').on('change', updateMultipleColoursPreview);
+
+            // 초기 미리보기 설정
+            updateMultipleColoursPreview();
+
+            // 색상 목록 검색
+            $('#colourListSearch').on('input', function() {
+                const searchText = $(this).val().toLowerCase();
+                $('#colourList li').each(function() {
+                    const text = $(this).text().toLowerCase();
+                    if (!searchText || text.includes(searchText)) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            });
+        });
+    </script>
+
+    <style>
+        /* 드롭다운 옵션 스타일링 */
+        select option {
+            padding: 5px;
+        }
+
+        select option:checked {
+            background-color: #007bff;
+            color: white;
+        }
+
+        /* 검색 결과 하이라이트 */
+        .highlight {
+            background-color: yellow;
+        }
+
+        /* 체크박스 목록 스타일링 */
+        .enum-checkbox-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .form-check {
+            margin-bottom: 5px;
+        }
+    </style>
+}
